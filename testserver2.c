@@ -102,16 +102,16 @@ int main(int argc, char *argv[])
 								active_count--;
 								//printf("\nTotal connections = %d,Active conections = %d\n",connection_count,active_count);
 								//printf("Connection number %d set for deletion\n",blk->con_num);
-								//close(blk->sock_id);
+								close(blk->sock_id);
 							}
 							else
 							{
-								printf("error in aio_return connection %d terminated with%s\n",blk->con_num,strerror(aio_error(blk->aiocbo_ptr)));
+								//printf("error in aio_return connection %d terminated with%s\n",blk->con_num,strerror(aio_error(blk->aiocbo_ptr)));
 							}
         					}
 						else
 						{
-							printf("error in aio_read connection %d terminated with %s\n",blk->con_num,strerror(aio_error(blk->aiocbo_ptr)));
+							//printf("error in aio_read connection %d terminated with %s\n",blk->con_num,strerror(aio_error(blk->aiocbo_ptr)));
 						}
 					}
 				}
@@ -135,29 +135,6 @@ int main(int argc, char *argv[])
 	}
 
 	return 0;
-}
-
-void executeFunction(int newsockfd) {
-	char buffer[1024];
-	int  n;
-	if (newsockfd < 0) {
-		perror("ERROR on accept");
-		exit(1);
-	}
-
-
-	bzero(buffer, 1024);
-      while( (n = recv(newsockfd , buffer ,  1024, 0))>0)
-      {
-
-      }
-	if (n < 0) {
-		perror("ERROR reading from socket");
-		exit(1);
-	}
-
-	//printf("Here is the message size: %d\n", n);
-
 }
 
 void callAIOREAD(struct aiocb* aiocbptr, int offset, int sockfd){
@@ -194,7 +171,7 @@ struct client_data * delete_node(struct client_data * Head)
 				
 				temp = curr_data->next;
 				curr_data->next = curr_data->next->next;
-				printf("Deleting node %d\n",temp->con_num);
+				//printf("Deleting node %d\n",temp->con_num);
 				//connection_count--;
 			//	close(temp->sock_id);
 				free((void *)temp->aiocbo_ptr->aio_buf);
@@ -213,7 +190,7 @@ struct client_data * delete_node(struct client_data * Head)
 		{
 			temp = Head;
 			Head = Head->next;
-			printf("Deleting node %d\n",temp->con_num);
+			//printf("Deleting node %d\n",temp->con_num);
 			//connection_count--;
 		//	close(temp->sock_id);
 			free((void *)temp->aiocbo_ptr->aio_buf);
