@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <time.h>
 #include <netdb.h>
 #include <netinet/in.h>
 
@@ -9,6 +9,8 @@
 #include <sys/fcntl.h>
 
 void executeFunction(int newsockfd);
+uint64_t total;
+int connections;
 int main(int argc, char *argv[]) {
 	int sockfd, newsockfd, portno, clilen, *new_sock;
 
@@ -16,7 +18,7 @@ int main(int argc, char *argv[]) {
 
 	/* First call to socket() function */
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-fcntl(sockfd, F_SETFL, O_NONBLOCK);
+	fcntl(sockfd, F_SETFL, O_NONBLOCK);
 	if (sockfd < 0) {
 		perror("ERROR opening socket");
 		exit(1);
@@ -24,7 +26,7 @@ fcntl(sockfd, F_SETFL, O_NONBLOCK);
 
 	/* Initialize socket structure */
 	bzero((char *)&serv_addr, sizeof(serv_addr));
-	portno = 5001;
+	portno = 5555;
 
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
@@ -41,10 +43,10 @@ fcntl(sockfd, F_SETFL, O_NONBLOCK);
 
 	/* Accept actual connection from the client */
 	while (1) {
+		
 		newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
 
 		pthread_t t;
-
 
 		if (newsockfd>0 && pthread_create(&t, NULL, &executeFunction, newsockfd) < 0)
 		{
@@ -57,6 +59,10 @@ fcntl(sockfd, F_SETFL, O_NONBLOCK);
 }
 
 void executeFunction(int newsockfd) {
+	struct timespec start, end;
+	// Start timing here
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
+
 	char buffer[1024];
 	int  n;
 	if (newsockfd < 0) {
@@ -77,5 +83,13 @@ void executeFunction(int newsockfd) {
 
 	printf("Here is the message size: %d\n", n);
 
+	// End timing here
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
+	uint64_t diff = end.tv_nsec - start.tv_nsec;
+
+	total += diff;
+	connections++;
+
+	printf("Average time: %u", total/(1+connections));
 }
 
