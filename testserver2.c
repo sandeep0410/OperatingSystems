@@ -8,25 +8,31 @@
 #include <sys/unistd.h>
 #include <sys/fcntl.h>
 #include <aio.h>
-//#include<aiocb.h>
 #include<errno.h>
-/*typedef struct listen{
-	struct aiocbo *aiocbo_ptr;
-	struct listen *next;
-};*/
-#define BUF_SIZE 32767
-struct aiocb *aiocbo_ptr[10000];
+struct client_data{
+	struct aiocb *aiocbo_ptr;
+	struct client_data *next;
+	int to_delete;
+	int con_num;
+	int sock_id;
+};
+unsigned int connection_count = 0,active_count = 0;
+#define BUF_SIZE 4096
+//struct aiocb *aiocbo_ptr[10000];
 void executeFunction(int newsockfd);
 void callAIOREAD(struct aiocb* aiocbptr, int offset, int sockfd);
-int main(int argc, char *argv[]) {
+struct client_data * insert_data(struct client_data * Head);
+struct client_data * delete_node(struct client_data * Head);
+int main(int argc, char *argv[]) 
+{
 	int sockfd, newsockfd, portno, clilen, *new_sock;
-  char *buffer;
-  int i,j;
+  	char *buffer;
+  	int i;
 	struct sockaddr_in serv_addr, cli_addr;
-
+	struct client_data *HEAD,*blk,*debug;
 	/* First call to socket() function */
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-fcntl(sockfd, F_SETFL, O_NONBLOCK);
+	fcntl(sockfd, F_SETFL, O_NONBLOCK);
 	if (sockfd < 0) {
 		perror("ERROR opening socket");
 		exit(1);
@@ -34,7 +40,7 @@ fcntl(sockfd, F_SETFL, O_NONBLOCK);
 
 	/* Initialize socket structure */
 	bzero((char *)&serv_addr, sizeof(serv_addr));
-	portno = 5001;
+	portno = 5555;
 
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
@@ -46,62 +52,85 @@ fcntl(sockfd, F_SETFL, O_NONBLOCK);
 		exit(1);
 	}
 
-	listen(sockfd, 10000);
+	listen(sockfd, 5);
 	clilen = sizeof(cli_addr);
-  i =-1;
-	int k=-1;
+	HEAD = NULL;
 	/* Accept actual connection from the client */
-	while (1) {
+	while (1) 
+	{
 		newsockfd=-1;
-		if(k<1019)
-			newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
-
-		//pthread_t t;
-
-
+		newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
+	//	printf("Value of newsockfd = %d\n",newsockfd);
 		if (newsockfd>0 )
-		{ i++;
-			k++;
-                  printf("connection number %d\n",i);
-			aiocbo_ptr[i] = (struct aiocb*)malloc(sizeof(struct aiocb));
-		  callAIOREAD((struct aiocb*)aiocbo_ptr[i], 0, newsockfd);
-	}
-			for(j=0;j<=i;j++)
-      {
-        if(aiocbo_ptr[j] == 0)
-        {
-          continue;
-        }
-        if(aio_error(aiocbo_ptr[j]) == EINPROGRESS)
-      	{
-						//printf("buffer is: %s and length is %d\n ",aiocbo_ptr[j]->aio_buf, strlen((char *)aiocbo_ptr[j]->aio_buf));
-      		//printf("Reading client %d\n",j);
-      	}
-        else if(aio_error(aiocbo_ptr[j]) == 0)
-        {
-					//printf("buffer is: %s and length is %d\n ",aiocbo_ptr[j]->aio_buf, strlen((char *)aiocbo_ptr[j]->aio_buf));
-					if(strlen((char *)aiocbo_ptr[j]->aio_buf)==BUF_SIZE)
+		{ 
+                  	//printf("connection number %d\n",i);
+			connection_count++;
+			active_count++;
+			//printf("Total connections = %d,Active conections = %d\n",connection_count,active_count);
+                  	//printf("connection number %d\n",connection_count);
+		  	//Create a linked list data
+			//printf("Calling insert into head\n");
+			HEAD = insert_data(HEAD);
+			HEAD->sock_id = newsockfd;
+			//printf("Inserted into data list\n");
+			callAIOREAD(HEAD->aiocbo_ptr, 0, newsockfd);
+		}
+		//If there are no more connections to satisfy
+		if(newsockfd < 0)
+		{
+			for(blk=HEAD;blk;blk = blk->next)
+ 			{
+        			if(blk->to_delete != 1)//check if the node is not already set for deletion
+				{
+					//printf("status of connection %d is %s\n",blk->con_num,strerror(aio_error(blk->aiocbo_ptr)));
+					if(aio_error(blk->aiocbo_ptr) != EINPROGRESS)
 					{
-          callAIOREAD((struct aiocb*)aiocbo_ptr[j], (aiocbo_ptr[j]->aio_offset)+BUF_SIZE,aiocbo_ptr[j]->aio_fildes );
-						//printf("Increasing the buffer for %d\n",j);
-				}else{
-					aiocbo_ptr[j] = 0;
-					//printf("Deleting the memory for %d\n",j);
-          //free(&aiocbo_ptr[i]->aio_buf);
-					close(newsockfd);
-					k--;
-          free((struct aiocb*)aiocbo_ptr[j]);
+					
+						if(aio_error(blk->aiocbo_ptr) == 0)
+       					 	{
+						//	printf("Re read Condition %d\n",strlen((char *)blk->aiocbo_ptr->aio_buf));
+							if(aio_return(blk->aiocbo_ptr) > 0)
+							{
+          							free((void *)blk->aiocbo_ptr->aio_buf);
+								//printf("Continuing connection = %d\n",blk->con_num);
+								callAIOREAD(blk->aiocbo_ptr, ((blk->aiocbo_ptr->aio_offset)+BUF_SIZE),blk->aiocbo_ptr->aio_fildes );
+							}
+							else if(aio_return(blk->aiocbo_ptr) == 0)
+							{
+								//transfer complete delete node
+								blk->to_delete = 1;
+								active_count--;
+								//printf("\nTotal connections = %d,Active conections = %d\n",connection_count,active_count);
+								//printf("Connection number %d set for deletion\n",blk->con_num);
+								//close(blk->sock_id);
+							}
+							else
+							{
+								printf("error in aio_return connection %d terminated with%s\n",blk->con_num,strerror(aio_error(blk->aiocbo_ptr)));
+							}
+        					}
+						else
+						{
+							printf("error in aio_read connection %d terminated with %s\n",blk->con_num,strerror(aio_error(blk->aiocbo_ptr)));
+						}
 					}
-        }
-        /*else if(aio_error(aiocbo_ptr[j]) == -1)
-        {
-          //remove from array
-          aiocbo_ptr[j] = 0;
-					printf("Deleting the memory for %d\n",j);
-          free(&aiocbo_ptr[i]->aio_buf);
-          free(&aiocbo_ptr[i]);
-        }*/
-
+				}
+			}
+			if(active_count == 0 && connection_count > 0)
+			{
+				HEAD = delete_node(HEAD);
+			}
+	//		debug = HEAD;
+		/*	while(debug != NULL)
+			{
+				printf("Connection list %d -->",debug->con_num);
+				debug = debug->next;
+			}*/
+		//	printf("\n");
+		/*	if(active_count > 0)
+			{
+				printf("Total connections = %d\n,Active conections = %d\n",connection_count,active_count);
+			}*/
 		}
 	}
 
@@ -137,10 +166,61 @@ void callAIOREAD(struct aiocb* aiocbptr, int offset, int sockfd){
 	aiocbptr->aio_nbytes = BUF_SIZE;
 	aiocbptr->aio_fildes = sockfd;
 	aiocbptr->aio_offset = offset;
-
 if (aio_read(aiocbptr) == -1)
 	{
 			printf("Unable to start read");
 	}
 }
-
+struct client_data * insert_data(struct client_data * Head)
+{
+	struct client_data * temp;
+	temp = (struct client_data *)malloc(sizeof(struct client_data));
+	temp->aiocbo_ptr = (struct aiocb *)malloc(sizeof(struct aiocb));
+	temp->next = Head;
+	temp->to_delete = 0;
+	temp->con_num = connection_count;
+	return temp;	
+}
+struct client_data * delete_node(struct client_data * Head)
+{
+	struct client_data *temp,*curr_data;
+	if(Head !=NULL)
+	{
+		curr_data = Head;
+		while(curr_data->next != NULL)
+		{
+			if(curr_data->next->to_delete == 1)
+			{
+				
+				temp = curr_data->next;
+				curr_data->next = curr_data->next->next;
+				printf("Deleting node %d\n",temp->con_num);
+				//connection_count--;
+			//	close(temp->sock_id);
+				free((void *)temp->aiocbo_ptr->aio_buf);
+				free(temp->aiocbo_ptr);
+				free(temp);
+				//printf("A node deleted\n");
+				
+			}
+			else
+			{
+				curr_data = curr_data->next;
+			}
+		}	
+		
+		if(Head->to_delete == 1)
+		{
+			temp = Head;
+			Head = Head->next;
+			printf("Deleting node %d\n",temp->con_num);
+			//connection_count--;
+		//	close(temp->sock_id);
+			free((void *)temp->aiocbo_ptr->aio_buf);
+			free(temp->aiocbo_ptr);
+			free(temp);
+		//	printf("A node deleted\n");
+		}
+	}
+	return Head;	
+}
