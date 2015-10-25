@@ -10,11 +10,11 @@
 
 void executeFunction(int newsockfd);
 uint64_t total;
-int connections;
 int main(int argc, char *argv[]) {
 	int sockfd, newsockfd, portno, clilen, *new_sock;
 
 	struct sockaddr_in serv_addr, cli_addr;
+	
 
 	/* First call to socket() function */
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -47,7 +47,6 @@ int main(int argc, char *argv[]) {
 		newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
 
 		pthread_t t;
-
 		if (newsockfd>0 && pthread_create(&t, NULL, &executeFunction, newsockfd) < 0)
 		{
 			perror("could not create thread");
@@ -60,6 +59,7 @@ int main(int argc, char *argv[]) {
 
 void executeFunction(int newsockfd) {
 	struct timespec start, end;
+
 	// Start timing here
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
 
@@ -81,15 +81,12 @@ void executeFunction(int newsockfd) {
 		exit(1);
 	}
 
-	printf("Here is the message size: %d\n", n);
-
 	// End timing here
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
 	uint64_t diff = end.tv_nsec - start.tv_nsec;
 
 	total += diff;
-	connections++;
 
-	printf("Average time: %u", total/(1+connections));
+	printf("Total time: %u ns \n", total);
 }
 
